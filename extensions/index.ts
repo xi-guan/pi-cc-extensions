@@ -54,6 +54,8 @@ export default function (pi: ExtensionAPI): void {
 	// 输入框 ❯ 提示符：session_start 时按配置应用；setEditorComponent 是一次性替换。
 	pi.on("session_start", (_event, ctx) => {
 		applyPromptEditor(ctx);
+		// 思考块收起时的占位文字，和 Claude Code 一致。
+		if (ctx.hasUI) ctx.ui.setHiddenThinkingLabel("✻ Thinking…");
 	});
 	// working 状态行顶格，和 ❯ 对齐。
 	const disposeFlushStatusRow = installFlushStatusRow();
