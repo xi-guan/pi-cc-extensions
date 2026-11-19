@@ -16,6 +16,7 @@
 import { CustomEditor, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { config } from "../../config/config.ts";
 import { setInjectedKeybindings } from "../../utils/keybindings.ts";
+import { toImagePlaceholder } from "./image-placeholder.ts";
 
 /** `❯ ` 固定 2 列：glyph + 尾随空格。 */
 const PROMPT_GLYPH = "❯";
@@ -30,6 +31,11 @@ export function inputTextIndent(): number {
 }
 
 export class PromptEditor extends CustomEditor {
+	// pi inserts a pasted clipboard image as its temp path through this method
+	insertTextAtCursor(text: string): void {
+		super.insertTextAtCursor(toImagePlaceholder(text));
+	}
+
 	render(width: number): string[] {
 		// ❯ + 用户 padding：文本从 userPaddingX+2 列开始。
 		const self = this as unknown as { paddingX: number };

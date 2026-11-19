@@ -5,6 +5,7 @@ import { config } from "./config/config.ts";
 import piAliases from "./feature/shell/aliases.ts";
 import { installFlushDockedBash } from "./feature/shell/flush-docked-bash.ts";
 import customFooter from "./feature/shell/footer.ts";
+import imagePlaceholder from "./feature/shell/image-placeholder.ts";
 import { applyPromptEditor } from "./feature/shell/prompt-editor.ts";
 import piStartupHeader, { installEarlyStartupHeader } from "./feature/shell/startup-header.ts";
 import workingMessage from "./feature/shell/working-message.ts";
@@ -53,6 +54,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.on("session_start", (_event, ctx) => {
 		applyPromptEditor(ctx);
 	});
+	imagePlaceholder(pi);
 
 	// render stack：thinking controller 直接交给 style 作 query
 	// 两个功能独立开关，但共享同一个 transformer 注册槽位。
