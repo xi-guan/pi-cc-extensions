@@ -17,6 +17,7 @@ import {
 	footerGlyphs,
 	formatXaiFooterChip,
 	modelChip,
+	shortModelLabel,
 	parseGitStats,
 } from "../extensions/feature/shell/footer.ts";
 import {
@@ -416,4 +417,10 @@ test("parseGitStats sums numstat add/delete columns", () => {
 		add: 75,
 		del: 9,
 	});
+});
+
+test("shortModelLabel keeps only the model name", () => {
+	assert.equal(shortModelLabel("claude-opus-5.5"), "opus-5.5");
+	assert.equal(shortModelLabel("anthropic/claude-opus-5"), "opus-5");
+	assert.equal(shortModelLabel("gpt-6.1-sol"), "gpt-6.1-sol");
 });

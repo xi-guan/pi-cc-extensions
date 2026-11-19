@@ -193,6 +193,11 @@ const EFFORT_SYMBOL: Record<string, string> = {
 	max: "\u25cf",
 };
 
+/** 模型芯片只留型号：去掉 provider 和 `vendor/` 前缀，以及 Claude 的 `claude-` 前缀。 */
+export function shortModelLabel(id: string): string {
+	return id.slice(id.lastIndexOf("/") + 1).replace(/^claude-/, "");
+}
+
 /** 模型名后直接接圆标和等级，中间不用分隔点。 */
 export function modelChip(
 	theme: { fg: (color: string, text: string) => string },
@@ -575,11 +580,7 @@ const createCustomFooterFactory =
 			const usingSubscription =
 				!!model &&
 				["kimi-coding", "xai", "github-copilot", "openai"].includes(model.provider || "");
-			const modelLabel = model
-				? model.id.includes("/")
-					? model.id
-					: `${model.provider}/${model.id}`
-				: "no-model";
+			const modelLabel = model ? shortModelLabel(model.id) : "no-model";
 
 			const thinkingLevelStr = ctx.thinkingLevel || "off";
 			const thinkingColor = theme.getThinkingBorderColor(thinkingLevelStr);
