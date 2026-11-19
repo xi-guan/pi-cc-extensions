@@ -87,16 +87,12 @@ test("footerGitStatsMode defaults to working and accepts only known modes", () =
 	);
 });
 
-test("model chip joins effort with a circle instead of a separator dot", () => {
+test("model chip joins effort with a circle instead of a separator dot, all in gray", () => {
 	const theme = {
 		fg: (color: string, text: string) => `{${color}}${text}{/}`,
 	};
-	const color = (text: string) => `{think}${text}{/}`;
-	assert.equal(
-		modelChip(theme, "claude-sonnet", "high", color),
-		"{accent}claude-sonnet{/} {think}\u25d5 high{/}",
-	);
-	assert.equal(modelChip(theme, "claude-sonnet", "off", color), "{accent}claude-sonnet{/}");
+	assert.equal(modelChip(theme, "claude-sonnet", "high"), "{dim}claude-sonnet \u25d5 high{/}");
+	assert.equal(modelChip(theme, "claude-sonnet", "off"), "{dim}claude-sonnet{/}");
 });
 
 test("git status symbols take a color by role", () => {

@@ -1,7 +1,7 @@
 /**
  * 自定义底栏：chips + zentui 图标/句子
  *
- * 默认第一行：model  thinking · ██████░░░░ 45%/200k · 󰆼 42% · $0.01 · pi-usage · 其余 line1 芯片
+ * 默认第一行：model  thinking · ▬▬▬▬▬▬▬▬▬▬ 45%/200k · 󰆼 42% · $0.01 · pi-usage · 其余 line1 芯片
  * 默认第二行：cwd in session ·  branch (+16 −1) · 其余 line2 芯片
  * 第三行：仅当 line3 有可见芯片时出现
  * model / context / cache / rate / cost / tokens / cwd / git 与插件芯片同一套排布，可换行、调序、隐藏
@@ -198,16 +198,15 @@ export function shortModelLabel(id: string): string {
 	return id.slice(id.lastIndexOf("/") + 1).replace(/^claude-/, "");
 }
 
-/** 模型名后直接接圆标和等级，中间不用分隔点。 */
+/** 模型名后直接接圆标和等级，中间不用分隔点；和其他芯片一样用灰色。 */
 export function modelChip(
 	theme: { fg: (color: string, text: string) => string },
 	modelLabel: string,
 	level: string,
-	thinkingColor: (text: string) => string,
 ): string {
 	const symbol = EFFORT_SYMBOL[level];
-	if (!symbol) return theme.fg("accent", modelLabel);
-	return `${theme.fg("accent", modelLabel)} ${thinkingColor(`${symbol} ${level}`)}`;
+	if (!symbol) return theme.fg("dim", modelLabel);
+	return theme.fg("dim", `${modelLabel} ${symbol} ${level}`);
 }
 
 /** git 状态符号按职能分色：冲突/落后 error，修改 warning，未跟踪 muted，领先 success。 */
@@ -360,7 +359,7 @@ const cachedCompactionLimit = createCompactionLimitCache(() => extensionApi?.get
 const createCustomFooterFactory =
 	(ctx: ExtensionContext) => (tui: any, theme: any, footerData: any) => {
 		currentTui = tui;
-		const sep = theme.fg("muted", " · ");
+		const sep = theme.fg("dim", " · ");
 		const joinChips = (parts: string[]) => parts.filter(Boolean).join(sep);
 		let gitStats: GitStats | undefined;
 		let localUsageChip = "";
@@ -488,8 +487,12 @@ const createCustomFooterFactory =
 		const barGauge = (pct: number): string => {
 			const clamped = Math.max(0, Math.min(100, pct));
 			const filled = Math.round((clamped / 100) * BAR_WIDTH);
-			const color = clamped >= BAR_ERROR ? "error" : clamped >= BAR_WARNING ? "warning" : "accent";
-			return theme.fg(color, "█".repeat(filled)) + theme.fg("dim", "░".repeat(BAR_WIDTH - filled));
+			const color = clamped >= BAR_ERROR ? "error" : clamped >= BAR_WARNING ? "warning" : "success";
+			// ▬ is a bit shorter than a full cell, so the bar no longer towers over the text
+			return (
+				theme.fg(color, "▬".repeat(filled)) +
+				theme.fg("borderMuted", "▬".repeat(BAR_WIDTH - filled))
+			);
 		};
 
 		// pi-cc-status showCachePercent：最近一条助手消息的 cacheRead 占比
@@ -583,7 +586,6 @@ const createCustomFooterFactory =
 			const modelLabel = model ? shortModelLabel(model.id) : "no-model";
 
 			const thinkingLevelStr = ctx.thinkingLevel || "off";
-			const thinkingColor = theme.getThinkingBorderColor(thinkingLevelStr);
 
 			rememberExtensionStatuses(
 				footerData.getExtensionStatuses().entries() as Iterable<[string, string]>,
@@ -611,7 +613,7 @@ const createCustomFooterFactory =
 					? formatFooterCost(cost, config.footerCurrency, config.footerCurrencyRate)
 					: "";
 			const costChip = costLabel
-				? theme.fg("dim", costLabel) + (usingSubscription ? theme.fg("warning", " sub") : "")
+				? theme.fg("dim", costLabel) + (usingSubscription ? theme.fg("dim", " sub") : "")
 				: "";
 			const tokensLabel = config.footerSessionTokens
 				? formatSessionTokenTotal(tokens, footerGlyphs(config.footerNerdIcons).tokens)
@@ -642,10 +644,7 @@ const createCustomFooterFactory =
 			}
 
 			const builtinChips = new Map<string, string>([
-				[
-					FOOTER_MODEL_KEY,
-					modelChip(theme, modelLabel, model?.reasoning ? thinkingLevelStr : "", thinkingColor),
-				],
+				[FOOTER_MODEL_KEY, modelChip(theme, modelLabel, model?.reasoning ? thinkingLevelStr : "")],
 				[
 					FOOTER_CONTEXT_KEY,
 					barGauge(percent ?? 0) + theme.fg("dim", ` ${pctLabel}/${contextFigures.limitLabel}`),
