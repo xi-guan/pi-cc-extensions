@@ -56,6 +56,8 @@ export default function (pi: ExtensionAPI): void {
 		applyPromptEditor(ctx);
 		// 思考块收起时的占位文字，和 Claude Code 一致。
 		if (ctx.hasUI) ctx.ui.setHiddenThinkingLabel("✻ Thinking…");
+		// Working... 不带转圈符号。
+		if (ctx.hasUI) ctx.ui.setWorkingIndicator({ frames: [] });
 	});
 	// working 状态行顶格，和 ❯ 对齐。
 	const disposeFlushStatusRow = installFlushStatusRow();
