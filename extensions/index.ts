@@ -4,6 +4,7 @@ import { config } from "./config/config.ts";
 // shell
 import piAliases from "./feature/shell/aliases.ts";
 import { installFlushDockedBash } from "./feature/shell/flush-docked-bash.ts";
+import { installFlushStatusRow } from "./feature/shell/flush-status-row.ts";
 import customFooter from "./feature/shell/footer.ts";
 import imagePlaceholder from "./feature/shell/image-placeholder.ts";
 import { applyPromptEditor } from "./feature/shell/prompt-editor.ts";
@@ -54,6 +55,9 @@ export default function (pi: ExtensionAPI): void {
 	pi.on("session_start", (_event, ctx) => {
 		applyPromptEditor(ctx);
 	});
+	// working 状态行顶格，和 ❯ 对齐。
+	const disposeFlushStatusRow = installFlushStatusRow();
+	pi.on("session_shutdown", () => disposeFlushStatusRow());
 	imagePlaceholder(pi);
 
 	// render stack：thinking controller 直接交给 style 作 query

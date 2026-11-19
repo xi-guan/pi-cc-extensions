@@ -62,7 +62,8 @@ type EditorFactory = Parameters<ExtensionContext["ui"]["setEditorComponent"]>[0]
 const promptEditorFactory: EditorFactory = (tui, theme, keybindings) => {
 	// pi 把用户的 KeybindingsManager 注进来，顺带作为全扩展的按键提示取源。
 	setInjectedKeybindings(keybindings);
-	return new PromptEditor(tui, theme, keybindings, { embedWorkingStatus: true });
+	// working status stays on its own row above the editor, not inside the top border
+	return new PromptEditor(tui, theme, keybindings);
 };
 
 /** 是否正占着插槽；占据前的工厂用于原样还回去。 */
