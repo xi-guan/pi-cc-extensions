@@ -6,6 +6,7 @@ import {
 	getMarkdownTheme,
 	initTheme,
 	SkillInvocationMessageComponent,
+	UserMessageComponent,
 	type ParsedSkillBlock,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -156,4 +157,18 @@ test("message-display: refreshMessageDisplays 遍历并刷新已挂载组件", (
 	assert.equal(invalidated, 3);
 	dispose();
 	setConfig(normalizeConfig({ ...DEFAULT_CONFIG, mode: "on" }));
+});
+
+test("message-display: ccstyle on 时用户消息不留上下空行，off 时恢复原生", () => {
+	setConfig(normalizeConfig({ ...DEFAULT_CONFIG, mode: "on" }));
+	const dispose = installMessageDisplayRendering();
+	try {
+		assert.equal(new UserMessageComponent("好像还不错?").render(40).length, 1);
+		setConfig(normalizeConfig({ ...DEFAULT_CONFIG, mode: "off" }));
+		assert.equal(new UserMessageComponent("好像还不错?").render(40).length, 3);
+	} finally {
+		dispose();
+		setConfig(normalizeConfig({ ...DEFAULT_CONFIG }));
+	}
+	assert.equal(new UserMessageComponent("好像还不错?").render(40).length, 3);
 });

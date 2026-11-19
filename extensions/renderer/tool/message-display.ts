@@ -2,6 +2,7 @@ import {
 	BranchSummaryMessageComponent,
 	CompactionSummaryMessageComponent,
 	SkillInvocationMessageComponent,
+	UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
 import { Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { MESSAGE_DISPLAY_PATCH, patchRegistry } from "../../utils/patch-keys.ts";
@@ -100,11 +101,12 @@ function renderCcstyle(component: any, kind: DisplayKind): void {
 
 type PatchEntry = {
 	prototype: any;
+	method: string;
 	installed: (...args: any[]) => void;
 	original: (...args: any[]) => void;
 };
 
-/** patch 三个消息组件的 updateDisplay，返回统一 dispose（/reload 链安全）。 */
+/** patch 三个消息组件的 updateDisplay 和用户消息的 rebuild，返回统一 dispose（/reload 链安全）。 */
 export function installMessageDisplayRendering(): () => void {
 	const previous = patchRegistry.get<{ dispose: () => void }>(MESSAGE_DISPLAY_PATCH);
 	if (previous) previous.dispose();
@@ -133,16 +135,33 @@ export function installMessageDisplayRendering(): () => void {
 			original.call(this);
 		};
 		prototype.updateDisplay = installed;
-		patch.entries.push({ prototype, installed, original });
+		patch.entries.push({ prototype, method: "updateDisplay", installed, original });
 	};
+	// user message: native Markdown pads one blank row above and below the text; ccstyle drops both
+	const userPrototype = (UserMessageComponent as any).prototype;
+	const originalRebuild = userPrototype.rebuild;
+	const installedRebuild = function (this: any) {
+		originalRebuild.call(this);
+		if (!patch.active || config.mode === "off") return;
+		for (const child of this.children ?? []) {
+			if (child instanceof Markdown) (child as any).paddingY = 0;
+		}
+	};
+	userPrototype.rebuild = installedRebuild;
+	patch.entries.push({
+		prototype: userPrototype,
+		method: "rebuild",
+		installed: installedRebuild,
+		original: originalRebuild,
+	});
 	installOne(SkillInvocationMessageComponent, SKILL_KIND);
 	installOne(CompactionSummaryMessageComponent, COMPACTION_KIND);
 	installOne(BranchSummaryMessageComponent, BRANCH_KIND);
 	patch.dispose = () => {
 		patch.active = false;
 		for (const entry of patch.entries) {
-			if (entry.prototype.updateDisplay === entry.installed) {
-				entry.prototype.updateDisplay = entry.original;
+			if (entry.prototype[entry.method] === entry.installed) {
+				entry.prototype[entry.method] = entry.original;
 			}
 		}
 		patchRegistry.dispose(MESSAGE_DISPLAY_PATCH, patch);
