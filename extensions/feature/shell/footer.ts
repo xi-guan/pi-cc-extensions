@@ -193,6 +193,9 @@ const EFFORT_SYMBOL: Record<string, string> = {
 	max: "\u25cf",
 };
 
+/** 底栏文字统一用的灰色；dim 在深色底上太暗。 */
+const FOOTER_TEXT = "muted";
+
 /** 模型芯片只留型号：去掉 provider 和 `vendor/` 前缀，以及 Claude 的 `claude-` 前缀。 */
 export function shortModelLabel(id: string): string {
 	return id.slice(id.lastIndexOf("/") + 1).replace(/^claude-/, "");
@@ -205,8 +208,8 @@ export function modelChip(
 	level: string,
 ): string {
 	const symbol = EFFORT_SYMBOL[level];
-	if (!symbol) return theme.fg("dim", modelLabel);
-	return theme.fg("dim", `${modelLabel} ${symbol} ${level}`);
+	if (!symbol) return theme.fg(FOOTER_TEXT, modelLabel);
+	return theme.fg(FOOTER_TEXT, `${modelLabel} ${symbol} ${level}`);
 }
 
 /** git 状态符号按职能分色：冲突/落后 error，修改 warning，未跟踪 muted，领先 success。 */
@@ -359,7 +362,7 @@ const cachedCompactionLimit = createCompactionLimitCache(() => extensionApi?.get
 const createCustomFooterFactory =
 	(ctx: ExtensionContext) => (tui: any, theme: any, footerData: any) => {
 		currentTui = tui;
-		const sep = theme.fg("dim", " · ");
+		const sep = theme.fg(FOOTER_TEXT, " · ");
 		const joinChips = (parts: string[]) => parts.filter(Boolean).join(sep);
 		let gitStats: GitStats | undefined;
 		let localUsageChip = "";
@@ -613,7 +616,8 @@ const createCustomFooterFactory =
 					? formatFooterCost(cost, config.footerCurrency, config.footerCurrencyRate)
 					: "";
 			const costChip = costLabel
-				? theme.fg("dim", costLabel) + (usingSubscription ? theme.fg("dim", " sub") : "")
+				? theme.fg(FOOTER_TEXT, costLabel) +
+					(usingSubscription ? theme.fg(FOOTER_TEXT, " sub") : "")
 				: "";
 			const tokensLabel = config.footerSessionTokens
 				? formatSessionTokenTotal(tokens, footerGlyphs(config.footerNerdIcons).tokens)
@@ -647,12 +651,13 @@ const createCustomFooterFactory =
 				[FOOTER_MODEL_KEY, modelChip(theme, modelLabel, model?.reasoning ? thinkingLevelStr : "")],
 				[
 					FOOTER_CONTEXT_KEY,
-					barGauge(percent ?? 0) + theme.fg("dim", ` ${pctLabel}/${contextFigures.limitLabel}`),
+					barGauge(percent ?? 0) +
+						theme.fg(FOOTER_TEXT, ` ${pctLabel}/${contextFigures.limitLabel}`),
 				],
-				[FOOTER_CACHE_KEY, cacheLabel ? theme.fg("dim", cacheLabel) : ""],
-				[FOOTER_RATE_KEY, rateLabel ? theme.fg("dim", rateLabel) : ""],
+				[FOOTER_CACHE_KEY, cacheLabel ? theme.fg(FOOTER_TEXT, cacheLabel) : ""],
+				[FOOTER_RATE_KEY, rateLabel ? theme.fg(FOOTER_TEXT, rateLabel) : ""],
 				[FOOTER_COST_KEY, costChip],
-				[FOOTER_TOKENS_KEY, tokensLabel ? theme.fg("dim", tokensLabel) : ""],
+				[FOOTER_TOKENS_KEY, tokensLabel ? theme.fg(FOOTER_TEXT, tokensLabel) : ""],
 				[FOOTER_CWD_KEY, place],
 				[FOOTER_GIT_KEY, gitChip],
 			]);
