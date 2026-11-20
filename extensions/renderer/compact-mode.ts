@@ -403,6 +403,12 @@ function layoutExpandedToolCard(
 	// 展开面板外卡底色随组内工具状态聚合（与 default 模式分组卡同口径）：
 	// 有一个失败用失败底色、没有失败但有进行中用进行中底色、全成功用成功底色。
 	const outerSlot = slot;
+	// rule 样式的展开内容不铺底色、不留空行：横线已经划出这一轮的边界。
+	const flat = !live && config.compactSummaryStyle === "rule";
+	const backgroundRow = (line: string) =>
+		flat
+			? ` ${truncateToWidth(stripBackgroundAnsi(line), Math.max(0, width - 2), "")}`
+			: paddedBackgroundRow(theme, outerSlot, line, width);
 	/** live 每行前面的标记宽度（首行 `↳ `，其余对齐空格）。 */
 	const markerWidth = live ? 2 : 0;
 	const innerWidth = Math.max(0, width - 2 - markerWidth);
@@ -420,7 +426,8 @@ function layoutExpandedToolCard(
 			else {
 				// 与普通行同口径：剥掉 1 格 lead，由底色行补回的 1 格左边距代替。
 				const line = raw.replace(/^((?:\x1b\[[0-?]*[ -/]*[@-~])*) /, "$1");
-				lines.push(imageBackgroundRow(theme, outerSlot, line, imageKind, width));
+				if (flat) lines.push(imageKind === "filler" ? "" : ` ${line}`);
+				else lines.push(imageBackgroundRow(theme, outerSlot, line, imageKind, width));
 			}
 			return;
 		}
@@ -428,7 +435,7 @@ function layoutExpandedToolCard(
 			// 面板 pad 1 是唯一左边距：剥掉子行 collapsed 态自带的 1 格 lead，
 			// 否则标题行偏到 2、↳ 行偏到 4，左右不再对称。
 			const line = raw.replace(/^((?:\x1b\[[0-?]*[ -/]*[@-~])*) /, "$1");
-			lines.push(paddedBackgroundRow(theme, outerSlot, line, width));
+			lines.push(backgroundRow(line));
 			return;
 		}
 		// 槽位里不重复展开入口（见 SLOT_HINT_PATTERNS）。
@@ -448,21 +455,21 @@ function layoutExpandedToolCard(
 		);
 	};
 	const pushBlank = () => {
-		if (live || lastBlank) return;
-		lines.push(paddedBackgroundRow(theme, outerSlot, "", width));
+		if (live || flat || lastBlank) return;
+		lines.push(backgroundRow(""));
 		lastBlank = true;
 	};
 	for (let childIndex = 0; childIndex < children.length; childIndex++) {
 		const child = children[childIndex];
 		const painted = paints?.[childIndex];
 		const childLines = Array.isArray(painted) ? painted : child.render(innerWidth);
-		const innerCard = !live && isThinkingPreview(child) && child.expanded === true;
+		const innerCard = !live && !flat && isThinkingPreview(child) && child.expanded === true;
 		// 内联图片按 placement 把范围撑开：锚点前后的空行是图片占的位置，不能当首尾空行裁。
 		const { first, last } = contentRowRange(childLines);
 		if (first < 0) {
-			if (live) continue;
+			if (live || flat) continue;
 			for (const line of childLines) {
-				lines.push(paddedBackgroundRow(theme, outerSlot, line, width));
+				lines.push(backgroundRow(line));
 				lastBlank = !hasVisibleText(line);
 			}
 			continue;
@@ -535,6 +542,7 @@ function compactRoundCard(
 				bgSlot: string;
 				/** 全屏与主屏的图片行输出不同（见 imageBackgroundRow）。 */
 				fullscreen: boolean;
+				summaryStyle: string;
 				paints: string[][];
 				lines: string[];
 				hits: Array<{ child: any; start: number; end: number }>;
@@ -557,6 +565,7 @@ function compactRoundCard(
 			paint.theme === theme &&
 			paint.bgSlot === bgSlot &&
 			paint.fullscreen === isToolTuiFullscreen() &&
+			paint.summaryStyle === config.compactSummaryStyle &&
 			paint.paints.length === paints.length &&
 			paint.paints.every((item, index) => samePaintedLines(item, paints[index]))
 		) {
@@ -568,6 +577,7 @@ function compactRoundCard(
 			theme,
 			bgSlot,
 			fullscreen: isToolTuiFullscreen(),
+			summaryStyle: config.compactSummaryStyle,
 			paints,
 			lines: laid.lines,
 			hits: laid.hits,
@@ -1075,6 +1085,62 @@ function compactAssistantLineComponent(
 			paint = undefined;
 		},
 	};
+}
+
+/** compactSummaryStyle=rule：回合收尾是一条横线，右侧 `14s · 12:05 AM ↓`，展开后箭头翻成 ↑。 */
+function compactRoundRuleComponent(
+	component: any,
+	/** 每次 render 重算（Running 时长需逐步跳动）。 */
+	summary: () => string,
+	/** 回合结束的挂钟时间；行尾显示成 `12:05 AM`。 */
+	endedAt: () => number | undefined,
+	query?: CompactThinkingQuery,
+): any {
+	const self = component as any;
+	let paint: { signature: string; theme: unknown; lines: string[] } | undefined;
+	return {
+		render(width: number): string[] {
+			const theme = themeOf();
+			const pad = Math.max(0, Number(self.outputPad) || 0);
+			const available = Math.max(0, width - pad);
+			const resolved = summary();
+			const running = resolved.startsWith("Running...");
+			const hover = hoveredAssistantComponent === component;
+			const frame = running ? (query?.getThinkingAnimationFrame?.() ?? 0) : 0;
+			const expanded = self.expanded === true;
+			const label = summaryLineLabel(resolved, running ? undefined : endedAt());
+			const signature = `${width}|${hover}|${pad}|${frame}|${expanded}|${label}`;
+			if (paint && paint.signature === signature && paint.theme === theme) return paint.lines;
+			// 左侧横线恒定，会变的时长/时间/箭头都靠右。
+			const rightPlain = `${label ? `${label} ` : ""}${expanded ? "↑" : "↓"}`;
+			const textColor = hover ? "text" : "dim";
+			const right = running
+				? `${animateCompactThinkingText("Running...", theme, frame)}${theme.fg(textColor, rightPlain.slice("Running...".length))}`
+				: theme.fg(textColor, rightPlain);
+			// ↓/↑ are East Asian ambiguous width: CJK fonts draw them two cells wide, so leave one spare cell.
+			const rule = "─".repeat(Math.max(0, available - visibleWidth(rightPlain) - 2));
+			const line = `${theme.fg("border", rule)} ${right}`;
+			const lines = ["", `${" ".repeat(pad)}${truncateToWidth(line, available, "")}`];
+			paint = { signature, theme, lines };
+			return lines;
+		},
+		invalidate() {
+			paint = undefined;
+		},
+	};
+}
+
+/** 摘要行右侧文字：`Running... 9s`，或收尾后的 `14s · 12:05 AM`；工具计数不再显示。 */
+export function summaryLineLabel(summary: string, endedAt?: number): string {
+	const head = summary.split(", ")[0] ?? "";
+	const running = /^Running\.\.\.(?: · (.+))?$/.exec(head);
+	if (running) return running[1] ? `Running... ${running[1]}` : "Running...";
+	const ran = /^Ran for (.+)$/.exec(head);
+	const clock =
+		endedAt === undefined
+			? ""
+			: new Date(endedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+	return [ran?.[1] ?? "", clock].filter(Boolean).join(" · ");
 }
 
 function compactStopStatusLine(status: string, pad = 0): any {
@@ -1903,6 +1969,12 @@ export function installCompactMode(deps: CompactModeInstallDeps): CompactModeHoo
 	 * host，hit-test 直达它）。anchor 未挂进任何容器时（独立渲染）退回
 	 * contentContainer——与旧行为一致。
 	 */
+	/** 回合摘要行：按 compactSummaryStyle 画一行文字或一条收尾横线。 */
+	const roundSummaryLine = (identity: any, getSummary: () => string, round: CompactRound): any =>
+		config.compactSummaryStyle === "rule"
+			? compactRoundRuleComponent(identity, getSummary, () => round.endedAt, deps.query)
+			: compactAssistantLineComponent(identity, getSummary, deps.query);
+
 	const mountRoundTail = (round: CompactRound, makeParts: (identity: any) => any[]): void => {
 		if (!tailContainerOf(round.anchor)) {
 			// anchor 不在任何容器里（独立渲染/未挂载）：退回 anchor 内部，与旧行为一致。
@@ -2015,7 +2087,7 @@ export function installCompactMode(deps: CompactModeInstallDeps): CompactModeHoo
 		// 运行中恒在可写视口底缘，收尾的 Ran for 原地落进 scrollback，不再留下
 		// 被挤出视口后定格的 Running 帧。
 		mountRoundTail(round, (identity) => {
-			const parts: any[] = [compactAssistantLineComponent(identity, getSummary, deps.query)];
+			const parts: any[] = [roundSummaryLine(identity, getSummary, round)];
 			if (cardItems.length > 0) {
 				parts.push(
 					compactLiveSlot(
@@ -2113,7 +2185,7 @@ export function installCompactMode(deps: CompactModeInstallDeps): CompactModeHoo
 					// 面板上沿留 1 行卡外空行：面板底色与 userMessage 同色，
 					// 贴在一起会看成一个块；卡内顶部再加 1 行 padding 保持上下对称。
 					// 空行必须与面板同进退（childAtRow 参与面板拆分），用 panelBoundSpacer。
-					anchorChildren.push(panelBoundSpacer());
+					if (config.compactSummaryStyle !== "rule") anchorChildren.push(panelBoundSpacer());
 					anchorChildren.push(
 						compactRoundCard(
 							cardItems,
@@ -2210,12 +2282,16 @@ export function installCompactMode(deps: CompactModeInstallDeps): CompactModeHoo
 			flushPanel();
 			// anchorChildren 只剩面板件（spacer+panelBoundSpacer 都是 childAtRow 组件）：
 			// 面板挂回摘要行原位，text 已在各自组件上。
+			// rule 样式：横线留在原位、箭头翻成 ↑，展开内容接在它下面。
+			const rule = config.compactSummaryStyle === "rule";
+			const withRule = (identity: any) =>
+				rule ? [roundSummaryLine(identity, getSummary, round), ...anchorChildren] : anchorChildren;
 			if (mounted) {
-				if (anchorChildren.length > 0) mountRoundTail(round, () => anchorChildren);
+				if (rule || anchorChildren.length > 0) mountRoundTail(round, withRule);
 				else unmountRoundTail(round);
 			} else {
 				unmountRoundTail(round);
-				for (const child of anchorChildren) round.anchor.contentContainer.addChild(child);
+				for (const child of withRule(round.anchor)) round.anchor.contentContainer.addChild(child);
 			}
 			// 展开卡内工具会显示 error，外层仍挂 abort/length，避免只藏在折叠工具里。
 			appendStopStatus(round.anchor, stopStatus);
@@ -2234,9 +2310,7 @@ export function installCompactMode(deps: CompactModeInstallDeps): CompactModeHoo
 				// 空摘要不挂行（getter 在 Running 启动瞬间也可能短暂为空）。
 				// 只剩外层卡的回合同样不挂：摘要行没有可汇总的内容。
 				if ((summary || round.active) && (round.active || roundHasSummaryContent(round))) {
-					mountRoundTail(round, (identity) => [
-						compactAssistantLineComponent(identity, getSummary, deps.query),
-					]);
+					mountRoundTail(round, (identity) => [roundSummaryLine(identity, getSummary, round)]);
 				} else {
 					unmountRoundTail(round);
 				}

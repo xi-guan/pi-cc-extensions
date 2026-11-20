@@ -79,6 +79,7 @@ pi install git:github.com/minuque/pi-cc-extensions
 
   // thinking
   "useSummaryTitlesAsThinkingTitle": true, // 用最新摘要作思考标题
+  "compactSummaryStyle": "text",           // compact 回合摘要行：text 一行文字；rule 收尾横线，右侧时长 · 时间 ↓/↑
   "previewLines": 3,                       // 思考中的预览行数，0 隐藏
   "completedPreviewLines": null,           // 完成态预览行数，0 隐藏；null 跟随 previewLines。面板可输入任意值或 follow
   "animationIntervalMs": 90,               // 标题动画间隔（毫秒）

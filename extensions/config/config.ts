@@ -63,6 +63,8 @@ export type Config = {
 	expandedOutputMaxLines: number;
 	toolLabelClip: number;
 	useSummaryTitlesAsThinkingTitle: boolean;
+	/** compact 回合摘要行：text = `Ran for 8s, bash×2 · click to show more`；rule = 收尾横线 + 右侧时间与 ↓/↑。 */
+	compactSummaryStyle: "text" | "rule";
 	previewLines: number;
 	/** 思考完成后的折叠预览行数；null = 跟随 previewLines（保持旧行为）。 */
 	completedPreviewLines: number | null;
@@ -162,6 +164,7 @@ export const DEFAULT_CONFIG: Config = {
 	expandedOutputMaxLines: 10,
 	toolLabelClip: 0,
 	useSummaryTitlesAsThinkingTitle: true,
+	compactSummaryStyle: "text",
 	previewLines: 3,
 	completedPreviewLines: null,
 	animationIntervalMs: 90,
@@ -295,6 +298,7 @@ export function normalizeConfig(input: unknown): Config {
 			source.toolLabelClip ?? source.inputClip, // 兼容旧配置键
 		),
 		useSummaryTitlesAsThinkingTitle: source.useSummaryTitlesAsThinkingTitle !== false,
+		compactSummaryStyle: source.compactSummaryStyle === "rule" ? "rule" : "text",
 		previewLines: pickPositiveInt(
 			source.previewLines,
 			DEFAULT_CONFIG.previewLines,

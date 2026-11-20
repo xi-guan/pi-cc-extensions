@@ -40,6 +40,7 @@ import {
 	collectFullscreenToolCards,
 	componentAtLocalRow,
 	collapsedHintHitbox,
+	ROUND_RULE_HINT,
 	fullscreenContentWidth,
 	fullscreenLeafAt,
 	isMessageCard,
@@ -364,6 +365,7 @@ function isCollapsedHintRow(component: any, finalLine: string, localRow?: number
 
 /** 原生折叠卡展开提示的收尾特征：`(... N more lines, ctrl+o to expand)` 或行尾的 `to show more`。 */
 function isNativeExpandHintLine(line: string): boolean {
+	if (ROUND_RULE_HINT.test(stripTerminalSequencesPreservingLayout(line))) return true;
 	return /(\([^()]*\/(?: click| to expand)\)|(?:[\w/+]+\s+)?to (?:expand|show more)\)?)\s*$/.test(
 		stripTerminalSequencesPreservingLayout(line),
 	);
