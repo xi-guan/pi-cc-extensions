@@ -2,15 +2,25 @@
  * Clipboard image placeholder: show a pasted screenshot as `[Image #N]` instead of its temp path.
  *
  * pi saves a pasted image to `<tmpdir>/pi-clipboard-<uuid>.<ext>` and inserts that path into the
- * editor; the editor swaps it for a marker and the `input` hook swaps the marker back before the
- * prompt reaches the model, so the model still sees the real path.
+ * editor; the editor swaps it for a marker, and the `input` hook attaches the image files to the
+ * prompt while the text keeps `[Image #N]`. The chat then shows the same marker the editor did,
+ * and the model gets the image directly instead of reading the path with a tool call.
  */
+import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { ImageContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const CLIPBOARD_FILE = /^pi-clipboard-[0-9a-f-]{36}\.[a-z0-9]+$/i;
 const MARKER = /\[Image #(\d+)\]/g;
+const MIME_TYPES: Record<string, string> = {
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif": "image/gif",
+	".webp": "image/webp",
+};
 
 // numbers keep growing for the whole process so recalled history entries still resolve
 const imagePaths = new Map<number, string>();
@@ -24,15 +34,34 @@ export function toImagePlaceholder(text: string): string {
 	return `[Image #${lastImageId}]`;
 }
 
-/** Replaces known `[Image #N]` markers with their file paths; unknown markers stay as typed. */
-export function expandImagePlaceholders(text: string): string {
-	return text.replace(MARKER, (marker, id: string) => imagePaths.get(Number(id)) ?? marker);
+/** Loads the images behind known `[Image #N]` markers, once each, in order of first mention. */
+export async function loadPlaceholderImages(
+	text: string,
+): Promise<{ images: ImageContent[]; missing: string[] }> {
+	const ids = [...new Set([...text.matchAll(MARKER)].map((match) => Number(match[1])))];
+	const images: ImageContent[] = [];
+	const missing: string[] = [];
+	for (const id of ids) {
+		const file = imagePaths.get(id);
+		if (!file) continue;
+		const mimeType = MIME_TYPES[path.extname(file).toLowerCase()] ?? "image/png";
+		try {
+			images.push({ type: "image", data: (await readFile(file)).toString("base64"), mimeType });
+		} catch {
+			// temp files can be cleaned up by the OS between paste and submit
+			missing.push(`[Image #${id}]`);
+		}
+	}
+	return { images, missing };
 }
 
-/** Expands image markers in submitted prompts before pi processes them. */
+/** Attaches the images behind `[Image #N]` markers to submitted prompts; the text is left as typed. */
 export default function imagePlaceholder(pi: ExtensionAPI): void {
-	pi.on("input", (event) => {
-		const text = expandImagePlaceholders(event.text);
-		return text === event.text ? undefined : { action: "transform", text };
+	pi.on("input", async (event, ctx) => {
+		const { images, missing } = await loadPlaceholderImages(event.text);
+		if (missing.length > 0)
+			ctx.ui.notify(`Image file gone, not sent: ${missing.join(", ")}`, "warning");
+		if (images.length === 0) return undefined;
+		return { action: "transform", text: event.text, images: [...(event.images ?? []), ...images] };
 	});
 }

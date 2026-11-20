@@ -1,36 +1,54 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-	expandImagePlaceholders,
+	loadPlaceholderImages,
 	toImagePlaceholder,
 } from "../extensions/feature/shell/image-placeholder.ts";
 
-const clipboardPath = (uuid: string) => path.join(os.tmpdir(), `pi-clipboard-${uuid}.png`);
+function clipboardFile(bytes: string): string {
+	const file = path.join(os.tmpdir(), `pi-clipboard-${randomUUID()}.png`);
+	writeFileSync(file, bytes);
+	return file;
+}
 
-test("replaces a pi clipboard image path with a numbered marker and expands it back", () => {
-	const first = clipboardPath("9c2eaf6a-8d0d-4ddd-9cd9-9ce9b47b7c48");
-	const second = clipboardPath("9d8bf441-10b1-4df4-8cbc-8cc9bda2d5b4");
-	const a = toImagePlaceholder(first);
-	const b = toImagePlaceholder(second);
-	assert.match(a, /^\[Image #\d+\]$/);
-	assert.notEqual(a, b);
-	assert.equal(
-		expandImagePlaceholders(`${a} 是否可以显示为 ${b}`),
-		`${first} 是否可以显示为 ${second}`,
-	);
+test("pasted clipboard images become markers whose images are attached on submit", async () => {
+	const first = clipboardFile("first");
+	const second = clipboardFile("second");
+	try {
+		const a = toImagePlaceholder(first);
+		const b = toImagePlaceholder(second);
+		assert.match(a, /^\[Image #\d+\]$/);
+		assert.notEqual(a, b);
+		const { images, missing } = await loadPlaceholderImages(`${b} 和 ${a} 再看 ${b}`);
+		assert.deepEqual(missing, []);
+		assert.deepEqual(
+			images.map((image) => [Buffer.from(image.data, "base64").toString(), image.mimeType]),
+			[
+				["second", "image/png"],
+				["first", "image/png"],
+			],
+		);
+	} finally {
+		rmSync(first, { force: true });
+		rmSync(second, { force: true });
+	}
 });
 
-test("leaves other inserted text alone", () => {
+test("reports markers whose temp file is gone", async () => {
+	const file = clipboardFile("gone");
+	const marker = toImagePlaceholder(file);
+	rmSync(file);
+	assert.deepEqual(await loadPlaceholderImages(marker), { images: [], missing: [marker] });
+});
+
+test("leaves other inserted text and unknown markers alone", async () => {
 	assert.equal(toImagePlaceholder("hello"), "hello");
 	assert.equal(toImagePlaceholder("/Users/me/shot.png"), "/Users/me/shot.png");
-	assert.equal(
-		toImagePlaceholder("/elsewhere/pi-clipboard-9c2eaf6a-8d0d-4ddd-9cd9-9ce9b47b7c48.png"),
-		"/elsewhere/pi-clipboard-9c2eaf6a-8d0d-4ddd-9cd9-9ce9b47b7c48.png",
-	);
-});
-
-test("keeps markers it never issued", () => {
-	assert.equal(expandImagePlaceholders("see [Image #99999]"), "see [Image #99999]");
+	const elsewhere = `/elsewhere/pi-clipboard-${randomUUID()}.png`;
+	assert.equal(toImagePlaceholder(elsewhere), elsewhere);
+	assert.deepEqual(await loadPlaceholderImages("see [Image #99999]"), { images: [], missing: [] });
 });
