@@ -17,6 +17,7 @@ import agentSummary from "./feature/agent-summary/index.ts";
 import context from "./feature/context.ts";
 import sessionReference from "./feature/reference/index.ts";
 import { installCompactThinking } from "./feature/compact-thinking.ts";
+import { installMarkdownCompact } from "./renderer/markdown-compact.ts";
 
 // renderer
 import claudeCodeStyle, { getCompactThinkingConfig } from "./renderer/index.ts";
@@ -61,7 +62,12 @@ export default function (pi: ExtensionAPI): void {
 	});
 	// working 状态行顶格，和 ❯ 对齐。
 	const disposeFlushStatusRow = installFlushStatusRow();
-	pi.on("session_shutdown", () => disposeFlushStatusRow());
+	// 标题后不空行、代码块不画 ``` 围栏，和 Claude Code 一样紧凑。
+	const disposeMarkdownCompact = installMarkdownCompact();
+	pi.on("session_shutdown", () => {
+		disposeFlushStatusRow();
+		disposeMarkdownCompact();
+	});
 	imagePlaceholder(pi);
 
 	// render stack：thinking controller 直接交给 style 作 query
