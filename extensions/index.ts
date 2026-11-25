@@ -3,6 +3,7 @@ import { config } from "./config/config.ts";
 
 // shell
 import piAliases from "./feature/shell/aliases.ts";
+import { installDialogSelector } from "./feature/shell/dialog-selector.ts";
 import { installFlushDockedBash } from "./feature/shell/flush-docked-bash.ts";
 import { installFlushStatusRow } from "./feature/shell/flush-status-row.ts";
 import customFooter from "./feature/shell/footer.ts";
@@ -52,9 +53,12 @@ export default function (pi: ExtensionAPI): void {
 	if (config.enableWorkingMessage) workingMessage(pi);
 	customFooter(pi);
 
+	let disposeDialogSelector = () => {};
 	// 输入框 ❯ 提示符：session_start 时按配置应用；setEditorComponent 是一次性替换。
 	pi.on("session_start", (_event, ctx) => {
 		applyPromptEditor(ctx);
+		// select and confirm dialogs get claude code's numbered `❯ 1. Yes` rows
+		if (ctx.hasUI) disposeDialogSelector = installDialogSelector(ctx.ui.theme);
 		// 思考块收起时的占位文字，和 Claude Code 一致。
 		if (ctx.hasUI) ctx.ui.setHiddenThinkingLabel("✻ Thinking…");
 		// Working... 前用静态的 `-`，不转圈。
@@ -67,6 +71,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.on("session_shutdown", () => {
 		disposeFlushStatusRow();
 		disposeMarkdownCompact();
+		disposeDialogSelector();
 	});
 	imagePlaceholder(pi);
 
