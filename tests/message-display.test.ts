@@ -15,6 +15,7 @@ import {
 	setMessageDisplayTheme,
 } from "../extensions/renderer/tool/message-display.ts";
 import { DEFAULT_CONFIG, setConfig, normalizeConfig } from "../extensions/config/config.ts";
+import { stripTerminalSequencesPreservingLayout } from "../extensions/utils/ansi-text.ts";
 
 function stripAnsi(text: string): string {
 	return text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
@@ -171,4 +172,39 @@ test("message-display: ccstyle on 时用户消息不留上下空行，off 时恢
 		setConfig(normalizeConfig({ ...DEFAULT_CONFIG }));
 	}
 	assert.equal(new UserMessageComponent("好像还不错?").render(40).length, 3);
+});
+
+test("message-display: 用户消息首行带输入框同款 ❯，折行缩进 2 列，关掉输入框前缀时一起去掉", () => {
+	setConfig(normalizeConfig({ ...DEFAULT_CONFIG, mode: "on", enableEditorPrefix: true }));
+	const dispose = installMessageDisplayRendering();
+	try {
+		const plain = (lines: readonly string[]) =>
+			lines.map((line) => stripTerminalSequencesPreservingLayout(line).trimEnd());
+		assert.deepEqual(plain(new UserMessageComponent("行吧").render(40)), ["❯ 行吧"]);
+		assert.deepEqual(plain(new UserMessageComponent("aaaa bbbb cccc").render(12)), [
+			"❯ aaaa",
+			"  bbbb",
+			"  cccc",
+		]);
+		setConfig(normalizeConfig({ ...DEFAULT_CONFIG, mode: "on", enableEditorPrefix: false }));
+		assert.deepEqual(plain(new UserMessageComponent("行吧").render(40)), [" 行吧"]);
+	} finally {
+		dispose();
+		setConfig(normalizeConfig({ ...DEFAULT_CONFIG }));
+	}
+});
+
+test("message-display: refreshMessageDisplays 让 patch 之前建好的用户消息也去掉上下空行", () => {
+	// /reload rebuilds the transcript with the native prototype before the patch is reinstalled
+	const user = new UserMessageComponent("行吧");
+	assert.equal(user.render(40).length, 3);
+	setConfig(normalizeConfig({ ...DEFAULT_CONFIG, mode: "on" }));
+	const dispose = installMessageDisplayRendering();
+	try {
+		refreshMessageDisplays({ children: [{ children: [user] }], getMountedRoots: () => [] });
+		assert.equal(user.render(40).length, 1);
+	} finally {
+		dispose();
+		setConfig(normalizeConfig({ ...DEFAULT_CONFIG }));
+	}
 });

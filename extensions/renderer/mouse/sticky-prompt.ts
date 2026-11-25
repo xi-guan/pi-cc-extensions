@@ -26,6 +26,7 @@ import {
 	STICKY_PROMPT_STATE_SLOT,
 } from "../../utils/patch-keys.ts";
 import { isToolTuiFullscreen } from "../tool/names.ts";
+import { PROMPT_GLYPH } from "../tool/message-display.ts";
 import type { SgrMousePacket } from "./packets.ts";
 import { dockScrollButtonActive, setScrollButtonVisible } from "./scroll.ts";
 
@@ -233,13 +234,15 @@ export function computeStickyPrompt(tui: any, layout: any): StickyPromptInfo | n
  * 脱出底色，按终端默认色显示。
  */
 export function stickyPromptBar(text: string, width: number, hovered: boolean, theme: any): string {
+	// a message line led by `❯ ` already starts in column 0
+	const lead = text.startsWith(PROMPT_GLYPH) ? "" : STICKY_LEAD;
 	const hint = width >= STICKY_HINT_MIN_WIDTH ? STICKY_HINT_TEXT : "";
-	const room = Math.max(0, width - visibleWidth(STICKY_LEAD) - visibleWidth(hint));
+	const room = Math.max(0, width - visibleWidth(lead) - visibleWidth(hint));
 	const body = stripTerminalSequences(truncateToWidth(text, room, "…"));
 	const pad = " ".repeat(
-		Math.max(0, width - visibleWidth(STICKY_LEAD) - visibleWidth(body) - visibleWidth(hint)),
+		Math.max(0, width - visibleWidth(lead) - visibleWidth(body) - visibleWidth(hint)),
 	);
-	const plain = STICKY_LEAD + body + pad + hint;
+	const plain = lead + body + pad + hint;
 	try {
 		if (typeof theme?.fg !== "function" || typeof theme?.bg !== "function") return plain;
 		return theme.bg("userMessageBg", theme.fg(hovered ? "text" : "dim", plain));

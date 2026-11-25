@@ -268,6 +268,7 @@ export default function (
 			hooks.toolGrouping.refresh(getToolMouseTui());
 			// /reload、/resume 在 session_start 之前就重建了 transcript：已挂载的通知卡换上本插件的渲染器。
 			refreshSubagentNotifications(getToolMouseTui());
+			refreshMessageDisplays(getToolMouseTui());
 		});
 	});
 

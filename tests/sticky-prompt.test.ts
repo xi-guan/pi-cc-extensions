@@ -593,6 +593,11 @@ test("sticky prompt: truncated text keeps the bar styling across the whole row",
 	assert.match(bar, /…/);
 });
 
+test("sticky prompt: a message line led by ❯ keeps the glyph in column 0 like the message", () => {
+	const { theme } = fakeTheme();
+	assert.match(stickyPromptBar("❯ 行吧", 40, false, theme), /^❯ 行吧/);
+});
+
 test("sticky prompt: narrow viewport drops the click hint before the text", () => {
 	const { theme } = fakeTheme();
 	const narrow = stickyPromptBar("a much longer user message than fits", 16, false, theme);

@@ -99,6 +99,27 @@ function renderCcstyle(component: any, kind: DisplayKind): void {
 	);
 }
 
+// the input box's `❯ ` (prompt-editor.ts) in fixed dim: its thinking-level colour means nothing once sent
+export const PROMPT_GLYPH = "❯";
+const PROMPT_COLS = 2;
+const LEADING_STYLES_AND_GLYPH_COLS = /^((?:\x1b\[[0-9;]*m)*) {2}/;
+
+/** puts `❯ ` in the first line's two lead columns, indents the rest; memoized on Markdown's cached lines */
+function addPromptGlyph(markdown: Markdown): void {
+	(markdown as unknown as { paddingX: number }).paddingX = PROMPT_COLS;
+	const render = markdown.render.bind(markdown);
+	let memo: { source: readonly string[]; lines: string[] } | undefined;
+	markdown.render = (width: number) => {
+		const source = render(width);
+		if (memo?.source !== source) {
+			const glyph = displayTheme ? displayTheme.fg("dim", PROMPT_GLYPH) : PROMPT_GLYPH;
+			const first = (source[0] ?? "").replace(LEADING_STYLES_AND_GLYPH_COLS, `$1${glyph} `);
+			memo = { source, lines: [first, ...source.slice(1)] };
+		}
+		return memo.lines;
+	};
+}
+
 type PatchEntry = {
 	prototype: any;
 	method: string;
@@ -144,7 +165,9 @@ export function installMessageDisplayRendering(): () => void {
 		originalRebuild.call(this);
 		if (!patch.active || config.mode === "off") return;
 		for (const child of this.children ?? []) {
-			if (child instanceof Markdown) (child as any).paddingY = 0;
+			if (!(child instanceof Markdown)) continue;
+			(child as any).paddingY = 0;
+			if (config.enableEditorPrefix) addPromptGlyph(child);
 		}
 	};
 	userPrototype.rebuild = installedRebuild;
@@ -187,6 +210,11 @@ export function refreshMessageDisplays(root: any): void {
 	walkComponentTree(root, (value: any) => {
 		if (isMessageDisplayComponent(value)) {
 			value.invalidate?.();
+			return false;
+		}
+		// user messages fix their padding at construction; the private rebuild applies the current mode
+		if (value instanceof UserMessageComponent) {
+			(value as unknown as { rebuild(): void }).rebuild();
 			return false;
 		}
 	});
