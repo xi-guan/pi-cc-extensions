@@ -2329,8 +2329,49 @@ test("compact：消息级归属的 edit 行收尾后也排在摘要行之下", a
 
 		const folded = renderText(chat);
 		const summaryAt = folded.findIndex((line) => /Ran for .*bash×1/.test(line));
-		const editAt = folded.findIndex((line) => /(?:✓|✗) edit a\.ts/.test(line));
+		const editAt = folded.findIndex((line) => /(?:●|✗) edit a\.ts/.test(line));
 		assert.ok(summaryAt >= 0 && editAt > summaryAt, `摘要行应在 edit 之上: ${folded.join(" | ")}`);
+	} finally {
+		setToolMouseTui(null);
+		restore();
+	}
+});
+
+test("compact：同一条消息里 edit 排在其它工具之前，收尾后 edit 仍在摘要行之上", async () => {
+	const { restore, hooks } = installHooks();
+	const chat = new Container() as any;
+	setToolMouseTui({ children: [chat] });
+	try {
+		const message = {
+			role: "assistant",
+			timestamp: Date.now(),
+			stopReason: "toolUse",
+			content: [
+				{ type: "toolCall", id: "e1", name: "edit", arguments: { path: "a.ts" } },
+				{ type: "toolCall", id: "b1", name: "bash", arguments: { command: "one" } },
+			],
+		};
+		const anchor = new AssistantMessageComponent(message as any, true) as any;
+		const edit = tool("edit", "e1", { path: "a.ts" });
+		const bash = tool("bash", "b1", { command: "one" });
+		chat.addChild(anchor);
+		anchor.updateContent(message as any);
+		chat.addChild(edit);
+		chat.addChild(bash);
+		for (const item of [edit, bash]) {
+			item.executionStarted = true;
+			item.updateDisplay();
+		}
+		edit.updateResult({ content: [], details: { diff: "+x" }, isError: false });
+		bash.updateResult({ content: [{ type: "text", text: "line one" }], isError: false });
+		hooks.settleFinishedRound();
+		await settleFold();
+
+		// the edit ran first, so it reads first: the summary counts only the bash after it
+		const folded = renderText(chat);
+		const summaryAt = folded.findIndex((line) => /Ran for .*bash×1/.test(line));
+		const editAt = folded.findIndex((line) => /(?:●|✗) edit a\.ts/.test(line));
+		assert.ok(editAt >= 0 && summaryAt > editAt, `edit 应在摘要行之上: ${folded.join(" | ")}`);
 	} finally {
 		setToolMouseTui(null);
 		restore();
@@ -2788,7 +2829,7 @@ test("compact：流式消息里冒出外层调用也封口，ask 之后的计数
 
 		let lines = renderText(chat);
 		const firstSummaryAt = lines.findIndex((line) => /Ran for .*bash×1/.test(line));
-		const writeAt = lines.findIndex((line) => /(?:✓|✗) write a\.ts/.test(line));
+		const writeAt = lines.findIndex((line) => /(?:●|✗) write a\.ts/.test(line));
 		assert.ok(firstSummaryAt >= 0, `段一应收成 Ran for: ${lines.join(" | ")}`);
 		assert.ok(writeAt > firstSummaryAt, `write 行应在摘要行之下: ${lines.join(" | ")}`);
 
@@ -3109,7 +3150,7 @@ test("compact edit/write：计数只在正文显示一处，0 行预览带颜色
 		assert.equal(expandedRaw[0], "", "expanded edit keeps the gap from previous tool");
 		const expandedPlain = strip(expandedRaw);
 		const titlePlain = expandedPlain.find((line) => line.includes("edit a.ts")) ?? "";
-		assert.match(titlePlain, /^ ✓ edit a\.ts/, "expanded title uses Box pad only");
+		assert.match(titlePlain, /^ ● edit a\.ts/, "expanded title uses Box pad only");
 		assert.doesNotMatch(titlePlain, /\(\+\d+ -\d+\)/);
 		// ↳ 头行与标题文字列对齐（Box pad 1 + 缩进 2），body 行保持贴左。
 		const diffHeader = expandedPlain.find((line) => line.includes("↳ diff")) ?? "";

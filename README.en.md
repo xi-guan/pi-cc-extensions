@@ -79,7 +79,7 @@ Renderer snapshots for `on` / `compact` modes: [default](./docs/tool-render-exam
 
   // thinking
   "useSummaryTitlesAsThinkingTitle": true, // use latest summary as thinking title
-  "compactSummaryStyle": "text",           // compact round summary: text line, or rule = closing rule with duration · time ↓/↑ on the right
+  "compactSummaryStyle": "text",           // compact round summary: text line, or rule = closing rule led by tool counts, duration · time ▸/▾ on the right
   "previewLines": 3,                       // preview lines while thinking; 0 hides
   "completedPreviewLines": null,           // completed preview lines; null follows previewLines, 0 hides. Panel accepts any number or follow
   "animationIntervalMs": 90,               // title animation interval (ms)

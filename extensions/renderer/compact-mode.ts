@@ -1,6 +1,6 @@
 /**
  * Compact mode：每条含 toolCall 的 assistant message 折叠为一条逐步累加的摘要行
- * （`Ran for 8s, bash×2, read×2`），edit/write 独立标题行（`✓ write <path> (+25 -0)`），
+ * （`Ran for 8s, bash×2, read×2`），edit/write 独立标题行（`● write <path> (+25 -0)`），
  * 普通工具折叠时不显示独立行；展开（Ctrl+O / fullscreen 点击）时助手文本按原生渲染，
  * thinking 与工具卡装进按状态着色的面板（卡内恢复 compact-thinking/Pi 原生或专用
  * renderer）。edit/write 复用 mode=on 的 rich diff
@@ -766,7 +766,7 @@ function compactEditWriteLine(
 				: "";
 	const isError = component.result?.isError === true;
 	const isPending = !component.result || component.isPartial === true;
-	const icon = isError ? "✗" : isPending ? toolLoadingIcon() : "✓";
+	const icon = isError ? "✗" : isPending ? toolLoadingIcon() : "●";
 	const iconColor = isError ? "error" : isPending ? "dim" : "success";
 	let statsText = "";
 	let statsStyled = "";
@@ -1087,14 +1087,13 @@ function compactAssistantLineComponent(
 	};
 }
 
-/** compactSummaryStyle=rule：回合收尾是一条横线，右侧 `14s · 12:05 AM ↓`，展开后箭头翻成 ↑。 */
+/** compactSummaryStyle=rule：回合收尾横线 `bash×2 ──── 14s · 12:05 AM ▸`，展开后 ▸ 翻成 ▾。 */
 function compactRoundRuleComponent(
 	component: any,
 	/** 每次 render 重算（Running 时长需逐步跳动）。 */
 	summary: () => string,
 	/** 回合结束的挂钟时间；行尾显示成 `12:05 AM`。 */
 	endedAt: () => number | undefined,
-	query?: CompactThinkingQuery,
 ): any {
 	const self = component as any;
 	let paint: { signature: string; theme: unknown; lines: string[] } | undefined;
@@ -1106,20 +1105,20 @@ function compactRoundRuleComponent(
 			const resolved = summary();
 			const running = resolved.startsWith("Running...");
 			const hover = hoveredAssistantComponent === component;
-			const frame = running ? (query?.getThinkingAnimationFrame?.() ?? 0) : 0;
 			const expanded = self.expanded === true;
 			const label = summaryLineLabel(resolved, running ? undefined : endedAt());
-			const signature = `${width}|${hover}|${pad}|${frame}|${expanded}|${label}`;
+			const tools = summaryLineTools(resolved);
+			const signature = `${width}|${hover}|${pad}|${expanded}|${label}|${tools}`;
 			if (paint && paint.signature === signature && paint.theme === theme) return paint.lines;
-			// 左侧横线恒定，会变的时长/时间/箭头都靠右。
-			const rightPlain = `${label ? `${label} ` : ""}${expanded ? "↑" : "↓"}`;
+			// running rounds show their latest block below, so ▸ waits for the end; at the line's end it shifts nothing
+			const glyph = expanded ? "▾" : running ? "" : "▸";
+			const leftPlain = tools ? `${tools} ` : "";
+			const rightPlain = `${label ? ` ${label}` : ""}${glyph ? ` ${glyph}` : ""}`;
 			const textColor = hover ? "text" : "dim";
-			const right = running
-				? `${animateCompactThinkingText("Running...", theme, frame)}${theme.fg(textColor, rightPlain.slice("Running...".length))}`
-				: theme.fg(textColor, rightPlain);
-			// ↓/↑ are East Asian ambiguous width: CJK fonts draw them two cells wide, so leave one spare cell.
-			const rule = "─".repeat(Math.max(0, available - visibleWidth(rightPlain) - 2));
-			const line = `${theme.fg("border", rule)} ${right}`;
+			const rule = "─".repeat(
+				Math.max(0, available - visibleWidth(leftPlain) - visibleWidth(rightPlain)),
+			);
+			const line = `${theme.fg(textColor, leftPlain)}${theme.fg("border", rule)}${theme.fg(textColor, rightPlain)}`;
 			const lines = ["", `${" ".repeat(pad)}${truncateToWidth(line, available, "")}`];
 			paint = { signature, theme, lines };
 			return lines;
@@ -1130,11 +1129,18 @@ function compactRoundRuleComponent(
 	};
 }
 
-/** 摘要行右侧文字：`Running... 9s`，或收尾后的 `14s · 12:05 AM`；工具计数不再显示。 */
+/** 摘要行左侧文字：只留工具计数 `bash×2, read×1`。 */
+export function summaryLineTools(summary: string): string {
+	return summary
+		.split(", ")
+		.filter((part) => /×\d+$/.test(part))
+		.join(", ");
+}
+
+/** 摘要行右侧文字：静止的 `Running...`（计时和动画只在 Working 行），或收尾后的 `14s · 12:05 AM`；工具计数在左侧。 */
 export function summaryLineLabel(summary: string, endedAt?: number): string {
 	const head = summary.split(", ")[0] ?? "";
-	const running = /^Running\.\.\.(?: · (.+))?$/.exec(head);
-	if (running) return running[1] ? `Running... ${running[1]}` : "Running...";
+	if (head.startsWith("Running...")) return "Running...";
 	const ran = /^Ran for (.+)$/.exec(head);
 	const clock =
 		endedAt === undefined
@@ -1821,13 +1827,22 @@ export function installCompactMode(deps: CompactModeInstallDeps): CompactModeHoo
 		const isMember = roundMemberMatcher(round);
 		// 收尾后，本回合的外露行（edit/write/ask）一律排到摘要行之下；
 		// 回合还在跑时它们留在原位，摘要行才能钉在可写底缘。
+		// edit/write rows ahead of every counted tool ran first, so they keep their place above the summary
+		const leading = new Set<any>();
+		for (const child of children) {
+			if (!ids.has(child?.toolCallId)) continue;
+			if (!EDIT_WRITE_TOOLS.has(String(child.toolName ?? ""))) break;
+			leading.add(child);
+		}
 		const staysAbove = (value: any): boolean =>
-			isMember(value) && (!isOuterToolRow(ids, value) || live);
+			isMember(value) && (!isOuterToolRow(ids, value) || live || leading.has(value));
 		const pinToEnd = live && round.anchor?.expanded !== true;
 		/** 摘要行落在第一个外露行之前：外层行切出的那一段到此为止。 */
 		const outerFirst = (list: any[]): number => {
 			if (live) return -1;
-			for (let i = 0; i < list.length; i++) if (isOuterToolRow(ids, list[i])) return i;
+			for (let i = 0; i < list.length; i++) {
+				if (isOuterToolRow(ids, list[i]) && !leading.has(list[i])) return i;
+			}
 			return -1;
 		};
 		const current = children.indexOf(tail.host);
@@ -1972,7 +1987,7 @@ export function installCompactMode(deps: CompactModeInstallDeps): CompactModeHoo
 	/** 回合摘要行：按 compactSummaryStyle 画一行文字或一条收尾横线。 */
 	const roundSummaryLine = (identity: any, getSummary: () => string, round: CompactRound): any =>
 		config.compactSummaryStyle === "rule"
-			? compactRoundRuleComponent(identity, getSummary, () => round.endedAt, deps.query)
+			? compactRoundRuleComponent(identity, getSummary, () => round.endedAt)
 			: compactAssistantLineComponent(identity, getSummary, deps.query);
 
 	const mountRoundTail = (round: CompactRound, makeParts: (identity: any) => any[]): void => {

@@ -63,7 +63,7 @@ export type Config = {
 	expandedOutputMaxLines: number;
 	toolLabelClip: number;
 	useSummaryTitlesAsThinkingTitle: boolean;
-	/** compact 回合摘要行：text = `Ran for 8s, bash×2 · click to show more`；rule = 收尾横线 + 右侧时间与 ↓/↑。 */
+	/** compact 回合摘要行：text = `Ran for 8s, bash×2 · click to show more`；rule = `bash×2 ──── 14s · 12:05 AM ▸`，展开后 ▸ 翻成 ▾，运行中不画。 */
 	compactSummaryStyle: "text" | "rule";
 	previewLines: number;
 	/** 思考完成后的折叠预览行数；null = 跟随 previewLines（保持旧行为）。 */

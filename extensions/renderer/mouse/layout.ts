@@ -25,16 +25,16 @@ export function isMessageCard(component: any): boolean {
 }
 
 /** 行内 [click to show more] / [↑ Collapse] 提示的命中列区间（1-based，含两端）。 */
-/** compact 回合收尾线：横线后接文字，箭头收尾。 */
-export const ROUND_RULE_HINT = /─ ([^─\n]*[↓↑])\s*$/;
+/** compact 回合收尾线：工具计数打头，横线居中，以 Running... 或 ▸/▾ 收尾。 */
+export const ROUND_RULE_HINT = /^( *)((?:[^─\n]+ )?─+ (?:Running\.\.\.[^─\n]*|[^─\n]*[▸▾]))\s*$/;
 
 export function collapsedHintHitbox(line: string): { startCol: number; endCol: number } | null {
 	const plain = stripTerminalSequencesPreservingLayout(line);
-	// compact 回合收尾线 `──── 14s · 12:05 AM ↓`：横线右侧的文字和箭头都是入口。
+	// compact 回合收尾线 `bash×2 ──── 14s · 12:05 AM ▸`：整行都是入口。
 	const rule = ROUND_RULE_HINT.exec(plain);
-	if (rule?.[1]) {
-		const startCol = visibleWidth(plain.slice(0, rule.index + 2)) + 1;
-		return { startCol, endCol: startCol + visibleWidth(rule[1]) - 1 };
+	if (rule?.[2]) {
+		const startCol = visibleWidth(rule[1]) + 1;
+		return { startCol, endCol: startCol + visibleWidth(rule[2]) - 1 };
 	}
 	const match =
 		/(\([^()\n]*(?: \/ click|, (?:[\w/+]+\s+)?to (?:expand|show more))\)|click to show more|to show more|↑ Collapse|to collapse)(?=\)?\s*$)/.exec(
